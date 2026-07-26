@@ -1,0 +1,4 @@
+[env]
+PKG_CONFIG_PATH = { value = ".deps/pkgconfig", relative = true, force = true }
+C_INCLUDE_PATH = { value = ".deps/include", relative = true, force = true }
+CPATH = { value = ".deps/include", relative = true, force = true }

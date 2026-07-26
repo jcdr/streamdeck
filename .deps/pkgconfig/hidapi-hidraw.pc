@@ -1,0 +1,10 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=/usr/lib/x86_64-linux-gnu
+includedir=${prefix}/include
+
+Name: hidapi-hidraw
+Description: hidapi hidraw (local headers + system lib)
+Version: 0.14.0
+Libs: -L${libdir} -lhidapi-hidraw
+Cflags: -I${includedir}/hidapi
