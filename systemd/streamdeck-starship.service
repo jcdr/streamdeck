@@ -1,0 +1,18 @@
+[Unit]
+Description=Elgato Stream Deck Starship controller
+Documentation=file:///home/jcdr/streamdeck/README.md
+After=graphical-session-pre.target
+PartOf=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/jcdr/streamdeck/target/release/streamdeck-starship
+WorkingDirectory=/home/jcdr/streamdeck
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=graphical-session.target

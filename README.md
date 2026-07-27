@@ -77,7 +77,46 @@ cargo build --release
 cargo run --release
 ```
 
-Ctrl+C resets the deck and exits.
+Ctrl+C resets the deck (when present) and exits.
+
+The process **survives unplug/replug**: it polls about every 2 seconds while the
+deck is missing, reconnects when it appears, and repaints all keys. HID read
+failures while connected re-enter that wait loop (no process exit).
+
+## Systemd user service
+
+Starts with each graphical login (`graphical-session.target`) and stops on
+logout. Do **not** enable linger for this unit (it needs a desktop session).
+
+```bash
+# Build once (command is cargo, not "crago")
+cargo build --release
+
+# One-shot install helper
+./scripts/install-user-service.sh
+
+# Or manually:
+mkdir -p ~/.config/systemd/user
+cp systemd/streamdeck-starship.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now streamdeck-starship.service
+```
+
+Useful commands:
+
+```bash
+systemctl --user status streamdeck-starship.service
+journalctl --user -u streamdeck-starship.service -f
+systemctl --user restart streamdeck-starship.service
+systemctl --user stop streamdeck-starship.service
+systemctl --user disable streamdeck-starship.service
+```
+
+After code changes: `cargo build --release` then
+`systemctl --user restart streamdeck-starship.service`.
+
+Do not run a second manual instance while the service owns the device (HID is
+exclusive).
 
 ## Udev (optional, recommended)
 
