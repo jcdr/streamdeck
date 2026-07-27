@@ -27,7 +27,8 @@ pub struct ClockSnapshot {
     pub date_year_line: String,
     pub date_month_line: String,
     pub date_day_line: String,
-    pub time_line: String,
+    pub hour_minute_line: String,
+    pub second_line: String,
     pub timezone_line: String,
 }
 
@@ -42,12 +43,8 @@ impl ClockSnapshot {
             date_year_line: format!("{:04}", now.year()),
             date_month_line: format!("{:02}", now.month()),
             date_day_line: format!("{:02}", now.day()),
-            time_line: format!(
-                "{:02}:{:02}.{:02}",
-                now.hour(),
-                now.minute(),
-                now.second()
-            ),
+            hour_minute_line: format!("{:02}:{:02}", now.hour(), now.minute()),
+            second_line: format!("{:02}", now.second()),
             timezone_line: format_timezone_label(now),
         }
     }
@@ -60,8 +57,12 @@ impl ClockSnapshot {
         ]
     }
 
-    pub fn time_lines(&self) -> [&str; 2] {
-        [self.time_line.as_str(), self.timezone_line.as_str()]
+    pub fn time_lines(&self) -> [&str; 3] {
+        [
+            self.hour_minute_line.as_str(),
+            self.second_line.as_str(),
+            self.timezone_line.as_str(),
+        ]
     }
 }
 
