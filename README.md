@@ -27,7 +27,7 @@ Row 3: 20%       | 40%         | 60%         | 80%     | 100%
 
 | Index | Action | Command / XFCE equivalent |
 | --- | --- | --- |
-| 0 | Full screenshot | `Print` → `xfce4-screenshooter` |
+| 0 | Full screenshot | `Print` → `/usr/local/bin/screenshoot-full` |
 | 1 | Window screenshot | `Shift+Print` → `/usr/local/bin/screenshoot-window` |
 | 2 | Region screenshot | `Ctrl+Print` → `/usr/local/bin/screenshoot-region` |
 | 5 | Mute audio | `Ctrl+End` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 1` |
@@ -47,16 +47,13 @@ Row 3: 20%       | 40%         | 60%         | 80%     | 100%
 2. **Do not use `pactl` here.** Custom XFCE binds use WirePlumber `wpctl`.
 3. **Do not use stock XFCE Print bindings.** This machine overrides them:
    window/region use local scripts that auto-save under `~/Pictures`.
-4. **Full screenshot is interactive on purpose.** `Print` runs bare
-   `xfce4-screenshooter` (dialog), not `-f`. Matching that avoids surprising
-   auto-save behavior.
-5. **HID access.** Only one process can own the device. Install the udev rule
+4. **HID access.** Only one process can own the device. Install the udev rule
    (or keep an ACL on the hidraw node) so the app does not need root.
-6. **Always `flush()` after writing key images**, or nothing appears on the deck.
-7. **Window/region scripts need a shell.** `/usr/local/bin/screenshoot-*` are
+5. **Always `flush()` after writing key images**, or nothing appears on the deck.
+6. **Screenshot scripts need a shell.** `/usr/local/bin/screenshoot-*` are
    one-line shell snippets without a shebang. XFCE runs them via a shell;
    direct `exec` fails with `ENOEXEC`. This app runs them as `sh <script>`.
-8. **Screenshots need the graphical session.** `wpctl` works without `DISPLAY`;
+7. **Screenshots need the graphical session.** `wpctl` works without `DISPLAY`;
    `xfce4-screenshooter` does not. If the controller is started outside XFCE
    (service, IDE, agent), it inherits `DISPLAY` / `XAUTHORITY` /
    `DBUS_SESSION_BUS_ADDRESS` from `xfce4-session` via `/proc`.

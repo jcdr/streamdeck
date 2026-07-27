@@ -3,24 +3,9 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 
 const SHELL_BINARY: &str = "sh";
-const XFCE4_SCREENSHOOTER_BINARY: &str = "xfce4-screenshooter";
+const FULL_SCREENSHOT_SCRIPT: &str = "/usr/local/bin/screenshoot-full";
 const WINDOW_SCREENSHOT_SCRIPT: &str = "/usr/local/bin/screenshoot-window";
 const REGION_SCREENSHOT_SCRIPT: &str = "/usr/local/bin/screenshoot-region";
-
-fn spawn_detached(binary_path: &str, arguments: &[&str]) -> Result<(), String> {
-    require_display_for_screenshots()?;
-
-    let child = Command::new(binary_path)
-        .args(arguments)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("failed to spawn {binary_path}: {error}"))?;
-
-    reap_child_in_background(child, binary_path);
-    Ok(())
-}
 
 fn spawn_shell_script(script_path: &str) -> Result<(), String> {
     require_display_for_screenshots()?;
@@ -75,7 +60,7 @@ fn reap_child_in_background(mut child: Child, label: &str) {
 }
 
 pub fn capture_full_screenshot() -> Result<(), String> {
-    spawn_detached(XFCE4_SCREENSHOOTER_BINARY, &[])
+    spawn_shell_script(FULL_SCREENSHOT_SCRIPT)
 }
 
 pub fn capture_active_window_screenshot() -> Result<(), String> {
