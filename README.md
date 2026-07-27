@@ -11,7 +11,7 @@ shortcuts on this machine.
 | **elgato-streamdeck** (Rust) | Low-level HID library | Best: direct key control, images, no GUI stack, matches preferred language |
 | python-elgato-streamdeck | Low-level HID library | Excellent alternative if Python is preferred |
 | OpenDeck | Full desktop app + plugin host | Great general Linux daily driver; heavier than needed for fixed keymaps |
-| StreamController | Linux-first GUI controller | Polished UI; overkill for a fixed 7-key map |
+| StreamController | Linux-first GUI controller | Polished UI; overkill for a fixed key map |
 | streamdeck-ui / deckmaster | Older controllers | Limited / less maintained |
 
 This project needs a fixed map of shell actions and custom images, so a thin
@@ -19,15 +19,26 @@ library client is the right layer.
 
 ## Key layout (Original V2, 5×3)
 
-| Index | Action | Same as XFCE |
+```
+Row 1: full shot | window shot | region shot | (empty) | (empty)
+Row 2: mute      | unmute      | vol −5%     | vol +5% | (empty)
+Row 3: 20%       | 40%         | 60%         | 80%     | 100%
+```
+
+| Index | Action | Command / XFCE equivalent |
 | --- | --- | --- |
-| 0 | Mute audio | `Ctrl+End` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 1` |
-| 1 | Unmute audio | `Ctrl+Home` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 0` |
-| 2 | Volume down 5% | `Ctrl+Page_Down` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-` |
-| 3 | Volume up 5% | `Ctrl+Page_Up` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+` |
-| 5 | Full screenshot | `Print` → `xfce4-screenshooter` |
-| 6 | Window screenshot | `Shift+Print` → `/usr/local/bin/screenshoot-window` |
-| 7 | Region screenshot | `Ctrl+Print` → `/usr/local/bin/screenshoot-region` |
+| 0 | Full screenshot | `Print` → `xfce4-screenshooter` |
+| 1 | Window screenshot | `Shift+Print` → `/usr/local/bin/screenshoot-window` |
+| 2 | Region screenshot | `Ctrl+Print` → `/usr/local/bin/screenshoot-region` |
+| 5 | Mute audio | `Ctrl+End` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 1` |
+| 6 | Unmute audio | `Ctrl+Home` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 0` |
+| 7 | Volume down 5% | `Ctrl+Page_Down` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-` |
+| 8 | Volume up 5% | `Ctrl+Page_Up` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+` |
+| 10 | Volume 20% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 20%` |
+| 11 | Volume 40% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 40%` |
+| 12 | Volume 60% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 60%` |
+| 13 | Volume 80% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 80%` |
+| 14 | Volume 100% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 100%` |
 
 ## Traps avoided
 
