@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -7,7 +8,7 @@ use std::time::{Duration, Instant};
 use elgato_streamdeck::{
     list_devices, new_hidapi, DeviceStateUpdate, StreamDeck, StreamDeckError,
 };
-use image::DynamicImage;
+use image::{DynamicImage, Rgba};
 
 use crate::actions::DeckAction;
 use crate::keys::{action_for_key_index, key_bindings};
@@ -17,15 +18,24 @@ const DEFAULT_BRIGHTNESS_PERCENT: u8 = 70;
 const BUTTON_POLL_TIMEOUT: Duration = Duration::from_millis(100);
 const DEVICE_RECONNECT_POLL_INTERVAL: Duration = Duration::from_secs(2);
 const DEVICE_OPEN_RETRY_LOG_INTERVAL: Duration = Duration::from_secs(30);
+const KEY_PRESS_FLASH_BLEND_NUMERATOR: u16 = 7;
+const KEY_PRESS_FLASH_BLEND_DENOMINATOR: u16 = 10;
+const KEY_PRESS_FLASH_WHITE_LEVEL: u16 = 255;
 
 pub enum ConnectedSessionOutcome {
     ShutdownRequested,
     DeviceDisconnected,
 }
 
+struct KeyVisualState {
+    idle_image: DynamicImage,
+    pressed_image: DynamicImage,
+}
+
 pub struct DeckRuntime {
     device: Arc<StreamDeck>,
     assets_directory: PathBuf,
+    key_visual_states: HashMap<u8, KeyVisualState>,
 }
 
 impl DeckRuntime {
@@ -52,10 +62,11 @@ impl DeckRuntime {
         Ok(Self {
             device: Arc::new(device),
             assets_directory,
+            key_visual_states: HashMap::new(),
         })
     }
 
-    pub fn apply_key_images(&self) -> Result<(), String> {
+    pub fn apply_key_images(&mut self) -> Result<(), String> {
         self.device
             .set_brightness(DEFAULT_BRIGHTNESS_PERCENT)
             .map_err(format_stream_deck_error)?;
@@ -63,15 +74,25 @@ impl DeckRuntime {
             .clear_all_button_images()
             .map_err(format_stream_deck_error)?;
 
+        self.key_visual_states.clear();
+
         for binding in key_bindings() {
             let image_path = self
                 .assets_directory
                 .join(KEY_IMAGE_DIRECTORY_NAME)
                 .join(binding.image_file_name);
-            let key_image = load_key_image(&image_path)?;
+            let idle_image = load_key_image(&image_path)?;
+            let pressed_image = create_pressed_key_image(&idle_image);
             self.device
-                .set_button_image(binding.key_index, key_image)
+                .set_button_image(binding.key_index, idle_image.clone())
                 .map_err(format_stream_deck_error)?;
+            self.key_visual_states.insert(
+                binding.key_index,
+                KeyVisualState {
+                    idle_image,
+                    pressed_image,
+                },
+            );
         }
 
         self.device.flush().map_err(format_stream_deck_error)?;
@@ -100,8 +121,15 @@ impl DeckRuntime {
             };
 
             for state_update in state_updates {
-                if let DeviceStateUpdate::ButtonUp(key_index) = state_update {
-                    handle_button_release(key_index);
+                match state_update {
+                    DeviceStateUpdate::ButtonDown(key_index) => {
+                        self.apply_key_press_effect(key_index);
+                    }
+                    DeviceStateUpdate::ButtonUp(key_index) => {
+                        self.apply_key_release_effect(key_index);
+                        handle_button_release(key_index);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -111,6 +139,31 @@ impl DeckRuntime {
 
     pub fn reset_device(&self) -> Result<(), String> {
         self.device.reset().map_err(format_stream_deck_error)
+    }
+
+    fn apply_key_press_effect(&self, key_index: u8) {
+        let Some(visual_state) = self.key_visual_states.get(&key_index) else {
+            return;
+        };
+        if let Err(error) = self.write_key_image(key_index, visual_state.pressed_image.clone()) {
+            eprintln!("press effect failed on key {key_index}: {error}");
+        }
+    }
+
+    fn apply_key_release_effect(&self, key_index: u8) {
+        let Some(visual_state) = self.key_visual_states.get(&key_index) else {
+            return;
+        };
+        if let Err(error) = self.write_key_image(key_index, visual_state.idle_image.clone()) {
+            eprintln!("release effect failed on key {key_index}: {error}");
+        }
+    }
+
+    fn write_key_image(&self, key_index: u8, image: DynamicImage) -> Result<(), String> {
+        self.device
+            .set_button_image(key_index, image)
+            .map_err(format_stream_deck_error)?;
+        self.device.flush().map_err(format_stream_deck_error)
     }
 }
 
@@ -122,9 +175,9 @@ pub fn run_device_supervisor(
 
     while !shutdown_requested.load(Ordering::SeqCst) {
         match try_open_deck_runtime(project_root.clone()) {
-            Ok(deck_runtime) => {
+            Ok(mut deck_runtime) => {
                 last_waiting_log_at = None;
-                match run_connected_session(&deck_runtime, shutdown_requested)? {
+                match run_connected_session(&mut deck_runtime, shutdown_requested)? {
                     ConnectedSessionOutcome::ShutdownRequested => {
                         if let Err(error) = deck_runtime.reset_device() {
                             eprintln!("reset failed on shutdown: {error}");
@@ -155,11 +208,34 @@ fn try_open_deck_runtime(project_root: PathBuf) -> Result<DeckRuntime, String> {
 }
 
 fn run_connected_session(
-    deck_runtime: &DeckRuntime,
+    deck_runtime: &mut DeckRuntime,
     shutdown_requested: &AtomicBool,
 ) -> Result<ConnectedSessionOutcome, String> {
     deck_runtime.apply_key_images()?;
     deck_runtime.run_event_loop_until_shutdown_or_disconnect(shutdown_requested)
+}
+
+fn create_pressed_key_image(idle_image: &DynamicImage) -> DynamicImage {
+    let mut rgba_image = idle_image.to_rgba8();
+    for pixel in rgba_image.pixels_mut() {
+        *pixel = blend_pixel_toward_white(*pixel);
+    }
+    DynamicImage::ImageRgba8(rgba_image)
+}
+
+fn blend_pixel_toward_white(pixel: Rgba<u8>) -> Rgba<u8> {
+    let red = blend_channel_toward_white(pixel[0]);
+    let green = blend_channel_toward_white(pixel[1]);
+    let blue = blend_channel_toward_white(pixel[2]);
+    Rgba([red, green, blue, pixel[3]])
+}
+
+fn blend_channel_toward_white(channel: u8) -> u8 {
+    let blended = (u16::from(channel) * (KEY_PRESS_FLASH_BLEND_DENOMINATOR
+        - KEY_PRESS_FLASH_BLEND_NUMERATOR)
+        + KEY_PRESS_FLASH_WHITE_LEVEL * KEY_PRESS_FLASH_BLEND_NUMERATOR)
+        / KEY_PRESS_FLASH_BLEND_DENOMINATOR;
+    blended as u8
 }
 
 fn log_waiting_for_device_if_due(error: &str, last_waiting_log_at: &mut Option<Instant>) {
