@@ -42,6 +42,9 @@ library client is the right layer.
 5. **HID access.** Only one process can own the device. Install the udev rule
    (or keep an ACL on the hidraw node) so the app does not need root.
 6. **Always `flush()` after writing key images**, or nothing appears on the deck.
+7. **Window/region scripts need a shell.** `/usr/local/bin/screenshoot-*` are
+   one-line shell snippets without a shebang. XFCE runs them via a shell;
+   direct `exec` fails with `ENOEXEC`. This app runs them as `sh <script>`.
 
 ## Build
 
