@@ -3,6 +3,7 @@ mod audio;
 mod device;
 mod keys;
 mod screenshot;
+mod session_env;
 
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,6 +25,7 @@ fn main() -> ExitCode {
 
 fn run_application() -> Result<(), String> {
     install_shutdown_handler()?;
+    session_env::apply_session_gui_environment()?;
 
     let project_root = resolve_project_root();
     let deck_runtime = Arc::new(DeckRuntime::open(project_root)?);

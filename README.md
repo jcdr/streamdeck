@@ -45,6 +45,10 @@ library client is the right layer.
 7. **Window/region scripts need a shell.** `/usr/local/bin/screenshoot-*` are
    one-line shell snippets without a shebang. XFCE runs them via a shell;
    direct `exec` fails with `ENOEXEC`. This app runs them as `sh <script>`.
+8. **Screenshots need the graphical session.** `wpctl` works without `DISPLAY`;
+   `xfce4-screenshooter` does not. If the controller is started outside XFCE
+   (service, IDE, agent), it inherits `DISPLAY` / `XAUTHORITY` /
+   `DBUS_SESSION_BUS_ADDRESS` from `xfce4-session` via `/proc`.
 
 ## Build
 
