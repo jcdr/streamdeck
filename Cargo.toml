@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ab_glyph = "0.2.32"
+chrono = "0.4.45"
 ctrlc = { version = "3.5.2", features = ["termination"] }
 elgato-streamdeck = "0.13.1"
 image = "0.25.10"

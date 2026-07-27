@@ -1,5 +1,6 @@
 mod actions;
 mod audio;
+mod clock_display;
 mod device;
 mod keys;
 mod screenshot;

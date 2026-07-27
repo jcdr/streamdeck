@@ -11,6 +11,9 @@ use elgato_streamdeck::{
 use image::{DynamicImage, Rgba};
 
 use crate::actions::DeckAction;
+use crate::clock_display::{
+    render_date_key_image, render_time_key_image, ClockSnapshot, DATE_KEY_INDEX, TIME_KEY_INDEX,
+};
 use crate::keys::{action_for_key_index, key_bindings};
 
 const KEY_IMAGE_DIRECTORY_NAME: &str = "assets/keys";
@@ -36,6 +39,7 @@ pub struct DeckRuntime {
     device: Arc<StreamDeck>,
     assets_directory: PathBuf,
     key_visual_states: HashMap<u8, KeyVisualState>,
+    last_clock_snapshot: Option<ClockSnapshot>,
 }
 
 impl DeckRuntime {
@@ -63,6 +67,7 @@ impl DeckRuntime {
             device: Arc::new(device),
             assets_directory,
             key_visual_states: HashMap::new(),
+            last_clock_snapshot: None,
         })
     }
 
@@ -75,6 +80,7 @@ impl DeckRuntime {
             .map_err(format_stream_deck_error)?;
 
         self.key_visual_states.clear();
+        self.last_clock_snapshot = None;
 
         for binding in key_bindings() {
             let image_path = self
@@ -82,30 +88,25 @@ impl DeckRuntime {
                 .join(KEY_IMAGE_DIRECTORY_NAME)
                 .join(binding.image_file_name);
             let idle_image = load_key_image(&image_path)?;
-            let pressed_image = create_pressed_key_image(&idle_image);
-            self.device
-                .set_button_image(binding.key_index, idle_image.clone())
-                .map_err(format_stream_deck_error)?;
-            self.key_visual_states.insert(
-                binding.key_index,
-                KeyVisualState {
-                    idle_image,
-                    pressed_image,
-                },
-            );
+            self.install_key_visual(binding.key_index, idle_image)?;
         }
 
+        self.refresh_clock_keys(true)?;
         self.device.flush().map_err(format_stream_deck_error)?;
         Ok(())
     }
 
     pub fn run_event_loop_until_shutdown_or_disconnect(
-        &self,
+        &mut self,
         shutdown_requested: &AtomicBool,
     ) -> Result<ConnectedSessionOutcome, String> {
         let button_reader = self.device.get_reader();
 
         while !shutdown_requested.load(Ordering::SeqCst) {
+            if let Err(error) = self.refresh_clock_keys(false) {
+                eprintln!("clock refresh failed: {error}");
+            }
+
             let state_updates = match button_reader.read(Some(BUTTON_POLL_TIMEOUT)) {
                 Ok(updates) => updates,
                 Err(_) if shutdown_requested.load(Ordering::SeqCst) => {
@@ -139,6 +140,53 @@ impl DeckRuntime {
 
     pub fn reset_device(&self) -> Result<(), String> {
         self.device.reset().map_err(format_stream_deck_error)
+    }
+
+    fn refresh_clock_keys(&mut self, force_redraw: bool) -> Result<(), String> {
+        let snapshot = ClockSnapshot::from_local_now();
+        if !force_redraw && self.last_clock_snapshot.as_ref() == Some(&snapshot) {
+            return Ok(());
+        }
+
+        let date_changed = self
+            .last_clock_snapshot
+            .as_ref()
+            .map(|previous| {
+                previous.date_year_line != snapshot.date_year_line
+                    || previous.date_month_line != snapshot.date_month_line
+                    || previous.date_day_line != snapshot.date_day_line
+            })
+            .unwrap_or(true);
+
+        if force_redraw || date_changed {
+            let date_image = render_date_key_image(&snapshot)?;
+            self.install_key_visual(DATE_KEY_INDEX, date_image)?;
+        }
+
+        let time_image = render_time_key_image(&snapshot)?;
+        self.install_key_visual(TIME_KEY_INDEX, time_image)?;
+
+        self.last_clock_snapshot = Some(snapshot);
+        self.device.flush().map_err(format_stream_deck_error)
+    }
+
+    fn install_key_visual(
+        &mut self,
+        key_index: u8,
+        idle_image: DynamicImage,
+    ) -> Result<(), String> {
+        let pressed_image = create_pressed_key_image(&idle_image);
+        self.device
+            .set_button_image(key_index, idle_image.clone())
+            .map_err(format_stream_deck_error)?;
+        self.key_visual_states.insert(
+            key_index,
+            KeyVisualState {
+                idle_image,
+                pressed_image,
+            },
+        );
+        Ok(())
     }
 
     fn apply_key_press_effect(&self, key_index: u8) {
@@ -231,8 +279,8 @@ fn blend_pixel_toward_white(pixel: Rgba<u8>) -> Rgba<u8> {
 }
 
 fn blend_channel_toward_white(channel: u8) -> u8 {
-    let blended = (u16::from(channel) * (KEY_PRESS_FLASH_BLEND_DENOMINATOR
-        - KEY_PRESS_FLASH_BLEND_NUMERATOR)
+    let blended = (u16::from(channel)
+        * (KEY_PRESS_FLASH_BLEND_DENOMINATOR - KEY_PRESS_FLASH_BLEND_NUMERATOR)
         + KEY_PRESS_FLASH_WHITE_LEVEL * KEY_PRESS_FLASH_BLEND_NUMERATOR)
         / KEY_PRESS_FLASH_BLEND_DENOMINATOR;
     blended as u8
