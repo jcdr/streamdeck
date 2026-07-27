@@ -7,6 +7,7 @@ pub enum DeckAction {
     UnmuteAudio,
     IncreaseVolume,
     DecreaseVolume,
+    SetVolumePercent(u8),
     FullScreenshot,
     WindowScreenshot,
     RegionScreenshot,
@@ -19,21 +20,27 @@ impl DeckAction {
             DeckAction::UnmuteAudio => audio::unmute_default_sink(),
             DeckAction::IncreaseVolume => audio::increase_default_sink_volume(),
             DeckAction::DecreaseVolume => audio::decrease_default_sink_volume(),
+            DeckAction::SetVolumePercent(volume_percent) => {
+                audio::set_default_sink_volume_percent(volume_percent)
+            }
             DeckAction::FullScreenshot => screenshot::capture_full_screenshot(),
             DeckAction::WindowScreenshot => screenshot::capture_active_window_screenshot(),
             DeckAction::RegionScreenshot => screenshot::capture_region_screenshot(),
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            DeckAction::MuteAudio => "mute audio",
-            DeckAction::UnmuteAudio => "unmute audio",
-            DeckAction::IncreaseVolume => "increase volume",
-            DeckAction::DecreaseVolume => "decrease volume",
-            DeckAction::FullScreenshot => "full screenshot",
-            DeckAction::WindowScreenshot => "window screenshot",
-            DeckAction::RegionScreenshot => "region screenshot",
+            DeckAction::MuteAudio => "mute audio".to_string(),
+            DeckAction::UnmuteAudio => "unmute audio".to_string(),
+            DeckAction::IncreaseVolume => "increase volume".to_string(),
+            DeckAction::DecreaseVolume => "decrease volume".to_string(),
+            DeckAction::SetVolumePercent(volume_percent) => {
+                format!("set volume to {volume_percent}%")
+            }
+            DeckAction::FullScreenshot => "full screenshot".to_string(),
+            DeckAction::WindowScreenshot => "window screenshot".to_string(),
+            DeckAction::RegionScreenshot => "region screenshot".to_string(),
         }
     }
 }
