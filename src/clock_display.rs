@@ -12,7 +12,7 @@ const KEY_IMAGE_WIDTH: u32 = 72;
 const KEY_IMAGE_HEIGHT: u32 = 72;
 const KEY_CONTENT_PADDING_PIXELS: u32 = 2;
 const LINE_SPACING_FRACTION: f32 = 0.12;
-const TIMEZONE_TO_PRIMARY_FONT_RATIO: f32 = 0.55;
+const SECONDARY_TO_PRIMARY_FONT_RATIO: f32 = 0.55;
 const MINIMUM_FONT_SIZE: f32 = 6.0;
 const BACKGROUND_COLOR: Rgba<u8> = Rgba([8, 10, 18, 255]);
 const FOREGROUND_COLOR: Rgba<u8> = Rgba([230, 240, 255, 255]);
@@ -51,43 +51,51 @@ impl ClockSnapshot {
         }
     }
 
-    pub fn date_lines(&self) -> [&str; 3] {
+    fn date_text_lines(&self) -> [TextLine<'_>; 3] {
         [
-            self.date_year_line.as_str(),
-            self.date_month_line.as_str(),
-            self.date_day_line.as_str(),
+            TextLine {
+                text: self.date_day_line.as_str(),
+                size_role: LineSizeRole::Primary,
+            },
+            TextLine {
+                text: self.date_month_line.as_str(),
+                size_role: LineSizeRole::Primary,
+            },
+            TextLine {
+                text: self.date_year_line.as_str(),
+                size_role: LineSizeRole::Secondary,
+            },
+        ]
+    }
+
+    fn time_text_lines(&self) -> [TextLine<'_>; 3] {
+        [
+            TextLine {
+                text: self.hour_minute_line.as_str(),
+                size_role: LineSizeRole::Primary,
+            },
+            TextLine {
+                text: self.second_line.as_str(),
+                size_role: LineSizeRole::Primary,
+            },
+            TextLine {
+                text: self.timezone_line.as_str(),
+                size_role: LineSizeRole::Secondary,
+            },
         ]
     }
 }
 
 pub fn render_date_key_image(snapshot: &ClockSnapshot) -> Result<DynamicImage, String> {
-    let lines: Vec<TextLine> = snapshot
-        .date_lines()
-        .into_iter()
-        .map(|text| TextLine {
-            text,
-            size_role: LineSizeRole::Primary,
-        })
-        .collect();
-    render_centered_text_lines(&lines)
+    let font = load_font()?;
+    let primary_font_size = shared_primary_font_size(&font, snapshot);
+    render_centered_text_lines(&font, &snapshot.date_text_lines(), primary_font_size)
 }
 
 pub fn render_time_key_image(snapshot: &ClockSnapshot) -> Result<DynamicImage, String> {
-    let lines = [
-        TextLine {
-            text: snapshot.hour_minute_line.as_str(),
-            size_role: LineSizeRole::Primary,
-        },
-        TextLine {
-            text: snapshot.second_line.as_str(),
-            size_role: LineSizeRole::Primary,
-        },
-        TextLine {
-            text: snapshot.timezone_line.as_str(),
-            size_role: LineSizeRole::Secondary,
-        },
-    ];
-    render_centered_text_lines(&lines)
+    let font = load_font()?;
+    let primary_font_size = shared_primary_font_size(&font, snapshot);
+    render_centered_text_lines(&font, &snapshot.time_text_lines(), primary_font_size)
 }
 
 #[derive(Clone, Copy)]
@@ -109,13 +117,24 @@ fn format_timezone_label(now: DateTime<Local>) -> String {
     now.format("%:z").to_string()
 }
 
-fn render_centered_text_lines(lines: &[TextLine<'_>]) -> Result<DynamicImage, String> {
-    let font = load_font()?;
+fn shared_primary_font_size(font: &FontRef<'_>, snapshot: &ClockSnapshot) -> f32 {
     let available_width = KEY_IMAGE_WIDTH.saturating_sub(KEY_CONTENT_PADDING_PIXELS * 2) as f32;
     let available_height = KEY_IMAGE_HEIGHT.saturating_sub(KEY_CONTENT_PADDING_PIXELS * 2) as f32;
-    let primary_font_size =
-        largest_primary_font_size_that_fits(&font, lines, available_width, available_height);
-    let metrics = line_metrics_for_primary_size(&font, lines, primary_font_size);
+    let date_lines = snapshot.date_text_lines();
+    let time_lines = snapshot.time_text_lines();
+    let date_primary_size =
+        largest_primary_font_size_that_fits(font, &date_lines, available_width, available_height);
+    let time_primary_size =
+        largest_primary_font_size_that_fits(font, &time_lines, available_width, available_height);
+    date_primary_size.min(time_primary_size)
+}
+
+fn render_centered_text_lines(
+    font: &FontRef<'_>,
+    lines: &[TextLine<'_>],
+    primary_font_size: f32,
+) -> Result<DynamicImage, String> {
+    let metrics = line_metrics_for_primary_size(font, lines, primary_font_size);
     let total_text_height = total_block_height(&metrics);
 
     let mut canvas = RgbaImage::from_pixel(KEY_IMAGE_WIDTH, KEY_IMAGE_HEIGHT, BACKGROUND_COLOR);
@@ -123,11 +142,11 @@ fn render_centered_text_lines(lines: &[TextLine<'_>]) -> Result<DynamicImage, St
 
     for (index, line_metric) in metrics.iter().enumerate() {
         let baseline_y = cursor_y + line_metric.ascent;
-        let line_width = measure_line_width_at_scale(&font, line_metric.scale, lines[index].text);
+        let line_width = measure_line_width_at_scale(font, line_metric.scale, lines[index].text);
         let cursor_x = (KEY_IMAGE_WIDTH as f32 - line_width) / 2.0;
         draw_text_line(
             &mut canvas,
-            &font,
+            font,
             line_metric.scale,
             cursor_x,
             baseline_y,
@@ -206,7 +225,7 @@ fn line_metrics_for_primary_size(
             let font_size = match line.size_role {
                 LineSizeRole::Primary => primary_font_size,
                 LineSizeRole::Secondary => {
-                    (primary_font_size * TIMEZONE_TO_PRIMARY_FONT_RATIO).max(MINIMUM_FONT_SIZE)
+                    (primary_font_size * SECONDARY_TO_PRIMARY_FONT_RATIO).max(MINIMUM_FONT_SIZE)
                 }
             };
             let scale = PxScale::from(font_size);
