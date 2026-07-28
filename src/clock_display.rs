@@ -5,8 +5,8 @@ use ab_glyph::{Font, FontRef, PxScale, ScaleFont as _};
 use chrono::{DateTime, Datelike, Local, Timelike};
 use image::{DynamicImage, Rgba, RgbaImage};
 
-pub const DATE_KEY_INDEX: u8 = 3;
 pub const TIME_KEY_INDEX: u8 = 4;
+pub const DATE_KEY_INDEX: u8 = 9;
 
 const KEY_IMAGE_WIDTH: u32 = 72;
 const KEY_IMAGE_HEIGHT: u32 = 72;

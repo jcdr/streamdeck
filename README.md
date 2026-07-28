@@ -20,9 +20,9 @@ library client is the right layer.
 ## Key layout (Original V2, 5×3)
 
 ```
-Row 1: full shot | window shot | region shot | date dd/mm/yyyy | time hh:mm / ss / TZ
-Row 2: mute      | unmute      | vol −5%     | vol +5%        | (empty)
-Row 3: 20%       | 40%         | 60%         | 80%            | 100%
+Row 1: full shot | window shot | region shot | (empty) | time hh:mm / ss / TZ
+Row 2: mute      | unmute      | vol −5%     | vol +5% | date dd/mm/yyyy
+Row 3: 20%       | 40%         | 60%         | 80%     | 100%
 ```
 
 | Index | Action | Command / XFCE equivalent |
@@ -30,14 +30,14 @@ Row 3: 20%       | 40%         | 60%         | 80%            | 100%
 | 0 | Full screenshot | `Print` → `/usr/local/bin/screenshoot-full` |
 | 1 | Window screenshot | `Shift+Print` → `/usr/local/bin/screenshoot-window` |
 | 2 | Region screenshot | `Ctrl+Print` → `/usr/local/bin/screenshoot-region` |
-| 3 | Date display | Live local date, three lines: `dd` / `mm` / `yyyy` (year smaller) |
 | 4 | Time display | Live local time, three lines: `hh:mm` / `ss` / timezone (TZ smaller) |
-
-Date and time keys share the same primary and secondary font sizes so they stay visually matched.
 | 5 | Mute audio | `Ctrl+End` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 1` |
 | 6 | Unmute audio | `Ctrl+Home` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 0` |
 | 7 | Volume down 5% | `Ctrl+Page_Down` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-` |
 | 8 | Volume up 5% | `Ctrl+Page_Up` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+` |
+| 9 | Date display | Live local date, three lines: `dd` / `mm` / `yyyy` (year smaller) |
+
+Date and time keys share the same primary and secondary font sizes so they stay visually matched.
 | 10 | Volume 20% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 20%` |
 | 11 | Volume 40% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 40%` |
 | 12 | Volume 60% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 60%` |
