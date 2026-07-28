@@ -20,9 +20,9 @@ library client is the right layer.
 ## Key layout (Original V2, 5×3)
 
 ```
-Row 1: full shot | window shot | region shot | (empty) | time hh:mm / ss / TZ
-Row 2: mute      | unmute      | vol −5%     | vol +5% | date dd/mm/yyyy
-Row 3: 20%       | 40%         | 60%         | 80%     | 100%
+Row 1: full shot | window shot | region shot | open Pictures | time hh:mm / ss / TZ
+Row 2: mute      | unmute      | vol −5%     | vol +5%       | date dd/mm/yyyy
+Row 3: 20%       | 40%         | 60%         | 80%           | 100%
 ```
 
 | Index | Action | Command / XFCE equivalent |
@@ -30,6 +30,7 @@ Row 3: 20%       | 40%         | 60%         | 80%     | 100%
 | 0 | Full screenshot | `Print` → `/usr/local/bin/screenshoot-full` |
 | 1 | Window screenshot | `Shift+Print` → `/usr/local/bin/screenshoot-window` |
 | 2 | Region screenshot | `Ctrl+Print` → `/usr/local/bin/screenshoot-region` |
+| 3 | Open screenshots folder | `thunar ~/Pictures` (XFCE file manager) |
 | 4 | Time display | Live local time, three lines: `hh:mm` / `ss` / timezone (TZ smaller) |
 | 5 | Mute audio | `Ctrl+End` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 1` |
 | 6 | Unmute audio | `Ctrl+Home` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 0` |

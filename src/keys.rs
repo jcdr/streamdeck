@@ -3,6 +3,7 @@ use crate::actions::DeckAction;
 const FULL_SCREENSHOT_KEY_INDEX: u8 = 0;
 const WINDOW_SCREENSHOT_KEY_INDEX: u8 = 1;
 const REGION_SCREENSHOT_KEY_INDEX: u8 = 2;
+const OPEN_SCREENSHOTS_FOLDER_KEY_INDEX: u8 = 3;
 
 const MUTE_KEY_INDEX: u8 = 5;
 const UNMUTE_KEY_INDEX: u8 = 6;
@@ -24,6 +25,7 @@ const VOLUME_100_PERCENT: u8 = 100;
 const FULL_SCREENSHOT_IMAGE_FILE_NAME: &str = "screenshot_full.jpg";
 const WINDOW_SCREENSHOT_IMAGE_FILE_NAME: &str = "screenshot_window.jpg";
 const REGION_SCREENSHOT_IMAGE_FILE_NAME: &str = "screenshot_region.jpg";
+const OPEN_SCREENSHOTS_FOLDER_IMAGE_FILE_NAME: &str = "open_screenshots_folder.jpg";
 
 const MUTE_IMAGE_FILE_NAME: &str = "mute.jpg";
 const UNMUTE_IMAGE_FILE_NAME: &str = "unmute.jpg";
@@ -59,6 +61,11 @@ pub fn key_bindings() -> &'static [KeyBinding] {
             key_index: REGION_SCREENSHOT_KEY_INDEX,
             action: DeckAction::RegionScreenshot,
             image_file_name: REGION_SCREENSHOT_IMAGE_FILE_NAME,
+        },
+        KeyBinding {
+            key_index: OPEN_SCREENSHOTS_FOLDER_KEY_INDEX,
+            action: DeckAction::OpenScreenshotsFolder,
+            image_file_name: OPEN_SCREENSHOTS_FOLDER_IMAGE_FILE_NAME,
         },
         KeyBinding {
             key_index: MUTE_KEY_INDEX,

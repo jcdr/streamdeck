@@ -1,4 +1,5 @@
 use crate::audio;
+use crate::file_browser;
 use crate::screenshot;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -11,6 +12,7 @@ pub enum DeckAction {
     FullScreenshot,
     WindowScreenshot,
     RegionScreenshot,
+    OpenScreenshotsFolder,
 }
 
 impl DeckAction {
@@ -26,6 +28,7 @@ impl DeckAction {
             DeckAction::FullScreenshot => screenshot::capture_full_screenshot(),
             DeckAction::WindowScreenshot => screenshot::capture_active_window_screenshot(),
             DeckAction::RegionScreenshot => screenshot::capture_region_screenshot(),
+            DeckAction::OpenScreenshotsFolder => file_browser::open_screenshots_directory(),
         }
     }
 
@@ -41,6 +44,7 @@ impl DeckAction {
             DeckAction::FullScreenshot => "full screenshot".to_string(),
             DeckAction::WindowScreenshot => "window screenshot".to_string(),
             DeckAction::RegionScreenshot => "region screenshot".to_string(),
+            DeckAction::OpenScreenshotsFolder => "open screenshots folder".to_string(),
         }
     }
 }

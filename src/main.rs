@@ -2,6 +2,7 @@ mod actions;
 mod audio;
 mod clock_display;
 mod device;
+mod file_browser;
 mod keys;
 mod screenshot;
 mod session_env;
