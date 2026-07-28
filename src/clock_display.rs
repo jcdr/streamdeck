@@ -12,6 +12,8 @@ const KEY_IMAGE_WIDTH: u32 = 72;
 const KEY_IMAGE_HEIGHT: u32 = 72;
 const KEY_CONTENT_PADDING_PIXELS: u32 = 2;
 const LINE_SPACING_FRACTION: f32 = 0.12;
+const TIMEZONE_TO_PRIMARY_FONT_RATIO: f32 = 0.55;
+const MINIMUM_FONT_SIZE: f32 = 6.0;
 const BACKGROUND_COLOR: Rgba<u8> = Rgba([8, 10, 18, 255]);
 const FOREGROUND_COLOR: Rgba<u8> = Rgba([230, 240, 255, 255]);
 const FONT_CANDIDATE_PATHS: &[&str] = &[
@@ -56,22 +58,47 @@ impl ClockSnapshot {
             self.date_day_line.as_str(),
         ]
     }
-
-    pub fn time_lines(&self) -> [&str; 3] {
-        [
-            self.hour_minute_line.as_str(),
-            self.second_line.as_str(),
-            self.timezone_line.as_str(),
-        ]
-    }
 }
 
 pub fn render_date_key_image(snapshot: &ClockSnapshot) -> Result<DynamicImage, String> {
-    render_centered_multiline_key(snapshot.date_lines().as_slice())
+    let lines: Vec<TextLine> = snapshot
+        .date_lines()
+        .into_iter()
+        .map(|text| TextLine {
+            text,
+            size_role: LineSizeRole::Primary,
+        })
+        .collect();
+    render_centered_text_lines(&lines)
 }
 
 pub fn render_time_key_image(snapshot: &ClockSnapshot) -> Result<DynamicImage, String> {
-    render_centered_multiline_key(snapshot.time_lines().as_slice())
+    let lines = [
+        TextLine {
+            text: snapshot.hour_minute_line.as_str(),
+            size_role: LineSizeRole::Primary,
+        },
+        TextLine {
+            text: snapshot.second_line.as_str(),
+            size_role: LineSizeRole::Primary,
+        },
+        TextLine {
+            text: snapshot.timezone_line.as_str(),
+            size_role: LineSizeRole::Secondary,
+        },
+    ];
+    render_centered_text_lines(&lines)
+}
+
+#[derive(Clone, Copy)]
+enum LineSizeRole {
+    Primary,
+    Secondary,
+}
+
+struct TextLine<'a> {
+    text: &'a str,
+    size_role: LineSizeRole,
 }
 
 fn format_timezone_label(now: DateTime<Local>) -> String {
@@ -82,39 +109,53 @@ fn format_timezone_label(now: DateTime<Local>) -> String {
     now.format("%:z").to_string()
 }
 
-fn render_centered_multiline_key(lines: &[&str]) -> Result<DynamicImage, String> {
+fn render_centered_text_lines(lines: &[TextLine<'_>]) -> Result<DynamicImage, String> {
     let font = load_font()?;
     let available_width = KEY_IMAGE_WIDTH.saturating_sub(KEY_CONTENT_PADDING_PIXELS * 2) as f32;
     let available_height = KEY_IMAGE_HEIGHT.saturating_sub(KEY_CONTENT_PADDING_PIXELS * 2) as f32;
-    let font_size = largest_font_size_that_fits(&font, lines, available_width, available_height);
-    let scale = PxScale::from(font_size);
-    let scaled_font = font.as_scaled(scale);
-    let line_height = scaled_font.height();
-    let line_gap = line_height * LINE_SPACING_FRACTION;
-    let total_text_height =
-        line_height * lines.len() as f32 + line_gap * (lines.len().saturating_sub(1) as f32);
+    let primary_font_size =
+        largest_primary_font_size_that_fits(&font, lines, available_width, available_height);
+    let metrics = line_metrics_for_primary_size(&font, lines, primary_font_size);
+    let total_text_height = total_block_height(&metrics);
 
     let mut canvas = RgbaImage::from_pixel(KEY_IMAGE_WIDTH, KEY_IMAGE_HEIGHT, BACKGROUND_COLOR);
-    let mut cursor_y =
-        (KEY_IMAGE_HEIGHT as f32 - total_text_height) / 2.0 + scaled_font.ascent();
+    let mut cursor_y = (KEY_IMAGE_HEIGHT as f32 - total_text_height) / 2.0;
 
-    for line in lines {
-        let line_width = measure_line_width(&scaled_font, line);
+    for (index, line_metric) in metrics.iter().enumerate() {
+        let baseline_y = cursor_y + line_metric.ascent;
+        let line_width = measure_line_width_at_scale(&font, line_metric.scale, lines[index].text);
         let cursor_x = (KEY_IMAGE_WIDTH as f32 - line_width) / 2.0;
-        draw_text_line(&mut canvas, &font, scale, cursor_x, cursor_y, line);
-        cursor_y += line_height + line_gap;
+        draw_text_line(
+            &mut canvas,
+            &font,
+            line_metric.scale,
+            cursor_x,
+            baseline_y,
+            lines[index].text,
+        );
+        cursor_y += line_metric.height;
+        if index + 1 < metrics.len() {
+            cursor_y += line_metric.gap_after;
+        }
     }
 
     Ok(DynamicImage::ImageRgba8(canvas))
 }
 
-fn largest_font_size_that_fits(
+struct LineMetric {
+    scale: PxScale,
+    height: f32,
+    ascent: f32,
+    gap_after: f32,
+}
+
+fn largest_primary_font_size_that_fits(
     font: &FontRef<'_>,
-    lines: &[&str],
+    lines: &[TextLine<'_>],
     available_width: f32,
     available_height: f32,
 ) -> f32 {
-    let mut low = 6.0_f32;
+    let mut low = MINIMUM_FONT_SIZE;
     let mut high = available_height;
     let mut best = low;
 
@@ -128,32 +169,73 @@ fn largest_font_size_that_fits(
         }
     }
 
-    best.floor().max(6.0)
+    best.floor().max(MINIMUM_FONT_SIZE)
 }
 
 fn text_block_fits(
     font: &FontRef<'_>,
-    lines: &[&str],
-    font_size: f32,
+    lines: &[TextLine<'_>],
+    primary_font_size: f32,
     available_width: f32,
     available_height: f32,
 ) -> bool {
-    let scale = PxScale::from(font_size);
-    let scaled_font = font.as_scaled(scale);
-    let line_height = scaled_font.height();
-    let line_gap = line_height * LINE_SPACING_FRACTION;
-    let total_height =
-        line_height * lines.len() as f32 + line_gap * (lines.len().saturating_sub(1) as f32);
-    if total_height > available_height {
+    let metrics = line_metrics_for_primary_size(font, lines, primary_font_size);
+    if total_block_height(&metrics) > available_height {
         return false;
     }
 
-    lines
-        .iter()
-        .all(|line| measure_line_width(&scaled_font, line) <= available_width)
+    lines.iter().zip(metrics.iter()).all(|(line, metric)| {
+        measure_line_width_at_scale(font, metric.scale, line.text) <= available_width
+    })
 }
 
-fn measure_line_width(scaled_font: &ab_glyph::PxScaleFont<&FontRef<'_>>, line: &str) -> f32 {
+fn line_metrics_for_primary_size(
+    font: &FontRef<'_>,
+    lines: &[TextLine<'_>],
+    primary_font_size: f32,
+) -> Vec<LineMetric> {
+    let primary_scale = PxScale::from(primary_font_size);
+    let primary_scaled = font.as_scaled(primary_scale);
+    let primary_height = primary_scaled.height();
+    let primary_gap = primary_height * LINE_SPACING_FRACTION;
+
+    lines
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let font_size = match line.size_role {
+                LineSizeRole::Primary => primary_font_size,
+                LineSizeRole::Secondary => {
+                    (primary_font_size * TIMEZONE_TO_PRIMARY_FONT_RATIO).max(MINIMUM_FONT_SIZE)
+                }
+            };
+            let scale = PxScale::from(font_size);
+            let scaled = font.as_scaled(scale);
+            let height = scaled.height();
+            let gap_after = if index + 1 < lines.len() {
+                primary_gap.min(height * LINE_SPACING_FRACTION)
+            } else {
+                0.0
+            };
+            LineMetric {
+                scale,
+                height,
+                ascent: scaled.ascent(),
+                gap_after,
+            }
+        })
+        .collect()
+}
+
+fn total_block_height(metrics: &[LineMetric]) -> f32 {
+    metrics
+        .iter()
+        .map(|metric| metric.height + metric.gap_after)
+        .sum()
+}
+
+fn measure_line_width_at_scale(font: &FontRef<'_>, scale: PxScale, line: &str) -> f32 {
+    let scaled_font = font.as_scaled(scale);
     let mut width = 0.0_f32;
     let mut previous_glyph_id = None;
     for character in line.chars() {
@@ -244,4 +326,3 @@ fn load_font() -> Result<FontRef<'static>, String> {
     FontRef::try_from_slice(font_bytes.as_slice())
         .map_err(|error| format!("failed to parse font: {error}"))
 }
-
