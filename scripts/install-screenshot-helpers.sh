@@ -5,7 +5,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HELPERS_DIRECTORY="${PROJECT_ROOT}/helpers"
 INSTALL_DIRECTORY="${DESTDIR:-}/usr/local/bin"
 
-if [[ "${EUID}" -ne 0 ]]; then
+if [[ -z "${DESTDIR:-}" && "${EUID}" -ne 0 ]]; then
   exec sudo -- "${BASH_SOURCE[0]}" "$@"
 fi
 
