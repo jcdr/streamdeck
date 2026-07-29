@@ -55,9 +55,9 @@ Date and time keys share the same primary and secondary font sizes so they stay 
 4. **HID access.** Only one process can own the device. Install the udev rule
    (or keep an ACL on the hidraw node) so the app does not need root.
 5. **Always `flush()` after writing key images**, or nothing appears on the deck.
-6. **Screenshot scripts need a shell.** `/usr/local/bin/screenshoot-*` are
-   one-line shell snippets without a shebang. XFCE runs them via a shell;
-   direct `exec` fails with `ENOEXEC`. This app runs them as `sh <script>`.
+6. **Screenshot helpers are installed to `/usr/local/bin`.** Sources live in
+   `helpers/` with a proper shebang. The controller still launches them via
+   `sh` for safety if an older shebang-less copy is present.
 7. **Screenshots need the graphical session.** `wpctl` works without `DISPLAY`;
    `xfce4-screenshooter` does not. If the controller is started outside XFCE
    (service, IDE, agent), it inherits `DISPLAY` / `XAUTHORITY` /
@@ -72,6 +72,24 @@ not available system-wide.
 ```bash
 cargo build --release
 ```
+
+## Screenshot helpers
+
+Repo copies of the XFCE screenshot wrappers:
+
+| File | Action |
+| --- | --- |
+| `helpers/screenshoot-full` | Full screen → `~/Pictures/Screenshot_….png` |
+| `helpers/screenshoot-window` | Active window |
+| `helpers/screenshoot-region` | Region select |
+
+Install system-wide (uses `sudo` when not root):
+
+```bash
+./scripts/install-screenshot-helpers.sh
+```
+
+That installs executable scripts into `/usr/local/bin/`.
 
 ## Run
 
@@ -90,18 +108,13 @@ failures while connected re-enter that wait loop (no process exit).
 Starts with each graphical login (`graphical-session.target`) and stops on
 logout. Do **not** enable linger for this unit (it needs a desktop session).
 
+The tracked unit is a **template**
+(`systemd/streamdeck-starship.service.in`) with `@PROJECT_ROOT@` placeholders.
+The install script expands it into `~/.config/systemd/user/` for your clone path
+(no hardcoded username).
+
 ```bash
-# Build once (command is cargo, not "crago")
-cargo build --release
-
-# One-shot install helper
 ./scripts/install-user-service.sh
-
-# Or manually:
-mkdir -p ~/.config/systemd/user
-cp systemd/streamdeck-starship.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now streamdeck-starship.service
 ```
 
 Useful commands:
@@ -129,3 +142,18 @@ sudo udevadm trigger
 ```
 
 Unplug and replug the Stream Deck after installing the rule.
+
+## Publishing notes
+
+- The repo is intended to be public; avoid committing absolute home paths.
+- Generated systemd units under `~/.config/systemd/user/` stay local.
+- Machine-local `libudev.so` linker stubs under `.deps/lib/` are gitignored.
+- Git commit author email is public on GitHub. Prefer GitHub’s private noreply
+  address for future commits, for example:
+
+  ```bash
+  git config user.email "YOUR_ID+USERNAME@users.noreply.github.com"
+  ```
+
+  Existing history still contains earlier author emails unless history is
+  rewritten (not done by default).

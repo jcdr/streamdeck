@@ -1,0 +1,2 @@
+#!/bin/sh
+xfce4-screenshooter -r -s "$HOME/Pictures/Screenshot_$(date -Is).png"
