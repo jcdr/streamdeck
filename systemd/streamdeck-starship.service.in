@@ -1,9 +1,11 @@
 [Unit]
 Description=Elgato Stream Deck Starship controller
 Documentation=file://@PROJECT_ROOT@/README.md
-After=graphical-session-pre.target
-PartOf=graphical-session.target
-Wants=graphical-session.target
+# XFCE/LightDM often never start graphical-session.target. Bind to the user
+# default target (active after graphical login) and wait briefly for the
+# desktop session processes the app probes for DISPLAY.
+After=default.target
+Wants=default.target
 
 [Service]
 Type=simple
@@ -13,6 +15,8 @@ Restart=on-failure
 RestartSec=3
 KillSignal=SIGINT
 TimeoutStopSec=5
+# Give xfce4-session a moment to appear so DISPLAY inheritance can work.
+ExecStartPre=/bin/sleep 2
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target

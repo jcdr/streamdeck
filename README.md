@@ -105,8 +105,13 @@ failures while connected re-enter that wait loop (no process exit).
 
 ## Systemd user service
 
-Starts with each graphical login (`graphical-session.target`) and stops on
-logout. Do **not** enable linger for this unit (it needs a desktop session).
+Starts with the **user** `default.target` after login (when your user systemd
+instance is up). XFCE under LightDM often **never starts**
+`graphical-session.target`, so binding the unit only to that target left the
+service enabled-but-dead after reboot.
+
+Do **not** enable linger for this unit unless you know you need it (the app
+still expects a desktop for screenshots).
 
 The tracked unit is a **template**
 (`systemd/streamdeck-starship.service.in`) with `@PROJECT_ROOT@` placeholders.
