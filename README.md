@@ -62,6 +62,9 @@ Date and time keys share the same primary and secondary font sizes so they stay 
    `xfce4-screenshooter` does not. If the controller is started outside XFCE
    (service, IDE, agent), it inherits `DISPLAY` / `XAUTHORITY` /
    `DBUS_SESSION_BUS_ADDRESS` from `xfce4-session` via `/proc`.
+8. **Do not use the Stream Deck's own idle-sleep timeout.** The Original V2 can
+   dim after a host-set idle period, but that would blank the deck while the
+   monitor is still on. Sleep follows display DPMS / screensaver / lock instead.
 
 ## Build
 
@@ -102,6 +105,31 @@ Ctrl+C resets the deck (when present) and exits.
 The process **survives unplug/replug**: it polls about every 2 seconds while the
 deck is missing, reconnects when it appears, and repaints all keys. HID read
 failures while connected re-enter that wait loop (no process exit).
+
+## Display power saving
+
+The Original V2 has no host-independent power switch. This controller follows
+the **display** instead of a Stream Deck idle timer:
+
+- When every connected monitor is in DPMS standby/suspend/off, the screensaver
+  is active, or the seated graphical session is locked, the deck backlight is
+  set to 0% and every key is painted black.
+- When the display is on again, brightness (70%) and key art are restored,
+  including the live date/time keys.
+- A key press while the deck is sleeping tries to wake the display (`xset dpms
+  force on` plus screensaver `SimulateUserActivity`) but does **not** run the
+  bound action. Unlock still uses the normal lock screen.
+
+The deck is not blanked while the monitor is still on. Native Stream Deck idle
+sleep is unused, so the two devices stay in step.
+
+Sources, any of which can put the deck to sleep:
+
+1. DRM connector DPMS in `/sys/class/drm` (connected + enabled outputs)
+2. X11 DPMS via `xset q` (`Monitor is On` vs Off/Standby/Suspend)
+3. Screensaver D-Bus `GetActive` (`org.xfce.ScreenSaver`, then freedesktop /
+   GNOME / KDE names)
+4. logind `LockedHint` on seated user sessions
 
 ## Systemd user service
 

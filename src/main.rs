@@ -2,6 +2,7 @@ mod actions;
 mod audio;
 mod clock_display;
 mod device;
+mod display_power;
 mod file_browser;
 mod keys;
 mod screenshot;

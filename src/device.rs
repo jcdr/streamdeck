@@ -1,24 +1,25 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use elgato_streamdeck::{
-    list_devices, new_hidapi, DeviceStateUpdate, StreamDeck, StreamDeckError,
-};
+use elgato_streamdeck::{DeviceStateUpdate, StreamDeck, StreamDeckError, list_devices, new_hidapi};
 use image::{DynamicImage, Rgba};
 
 use crate::actions::DeckAction;
 use crate::clock_display::{
-    render_date_key_image, render_time_key_image, ClockSnapshot, DATE_KEY_INDEX, TIME_KEY_INDEX,
+    ClockSnapshot, DATE_KEY_INDEX, TIME_KEY_INDEX, render_date_key_image, render_time_key_image,
 };
+use crate::display_power::{self, DisplayPowerObservation};
 use crate::keys::{action_for_key_index, key_bindings};
 
 const KEY_IMAGE_DIRECTORY_NAME: &str = "assets/keys";
 const DEFAULT_BRIGHTNESS_PERCENT: u8 = 70;
+const SLEEP_BRIGHTNESS_PERCENT: u8 = 0;
 const BUTTON_POLL_TIMEOUT: Duration = Duration::from_millis(100);
+const DISPLAY_POWER_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const DEVICE_RECONNECT_POLL_INTERVAL: Duration = Duration::from_secs(2);
 const DEVICE_OPEN_RETRY_LOG_INTERVAL: Duration = Duration::from_secs(30);
 const KEY_PRESS_FLASH_BLEND_NUMERATOR: u16 = 7;
@@ -40,6 +41,9 @@ pub struct DeckRuntime {
     assets_directory: PathBuf,
     key_visual_states: HashMap<u8, KeyVisualState>,
     last_clock_snapshot: Option<ClockSnapshot>,
+    display_is_power_saving: bool,
+    last_display_power_check_at: Option<Instant>,
+    keys_pressed_while_sleeping: HashSet<u8>,
 }
 
 impl DeckRuntime {
@@ -68,13 +72,31 @@ impl DeckRuntime {
             assets_directory,
             key_visual_states: HashMap::new(),
             last_clock_snapshot: None,
+            display_is_power_saving: false,
+            last_display_power_check_at: None,
+            keys_pressed_while_sleeping: HashSet::new(),
         })
     }
 
-    pub fn apply_key_images(&mut self) -> Result<(), String> {
+    pub fn initialize_visuals_for_current_display_power(&mut self) -> Result<(), String> {
+        let observation = display_power::query_display_power_state();
+        if observation.is_power_saving {
+            self.enter_hardware_sleep(&observation)
+        } else {
+            self.apply_awake_key_images()
+        }
+    }
+
+    fn apply_awake_key_images(&mut self) -> Result<(), String> {
+        self.paint_idle_key_images()?;
         self.device
             .set_brightness(DEFAULT_BRIGHTNESS_PERCENT)
             .map_err(format_stream_deck_error)?;
+        self.display_is_power_saving = false;
+        Ok(())
+    }
+
+    fn paint_idle_key_images(&mut self) -> Result<(), String> {
         self.device
             .clear_all_button_images()
             .map_err(format_stream_deck_error)?;
@@ -103,8 +125,14 @@ impl DeckRuntime {
         let button_reader = self.device.get_reader();
 
         while !shutdown_requested.load(Ordering::SeqCst) {
-            if let Err(error) = self.refresh_clock_keys(false) {
-                eprintln!("clock refresh failed: {error}");
+            if let Err(error) = self.sync_display_power_state(false) {
+                eprintln!("display power sync failed: {error}");
+            }
+
+            if !self.display_is_power_saving {
+                if let Err(error) = self.refresh_clock_keys(false) {
+                    eprintln!("clock refresh failed: {error}");
+                }
             }
 
             let state_updates = match button_reader.read(Some(BUTTON_POLL_TIMEOUT)) {
@@ -124,11 +152,10 @@ impl DeckRuntime {
             for state_update in state_updates {
                 match state_update {
                     DeviceStateUpdate::ButtonDown(key_index) => {
-                        self.apply_key_press_effect(key_index);
+                        self.handle_button_down(key_index);
                     }
                     DeviceStateUpdate::ButtonUp(key_index) => {
-                        self.apply_key_release_effect(key_index);
-                        handle_button_release(key_index);
+                        self.handle_button_up(key_index);
                     }
                     _ => {}
                 }
@@ -142,7 +169,94 @@ impl DeckRuntime {
         self.device.reset().map_err(format_stream_deck_error)
     }
 
+    fn handle_button_down(&mut self, key_index: u8) {
+        if self.display_is_power_saving {
+            self.keys_pressed_while_sleeping.insert(key_index);
+            self.wake_display_and_sync();
+            return;
+        }
+        self.apply_key_press_effect(key_index);
+    }
+
+    fn handle_button_up(&mut self, key_index: u8) {
+        if self.keys_pressed_while_sleeping.remove(&key_index) {
+            if self.display_is_power_saving {
+                self.wake_display_and_sync();
+            }
+            return;
+        }
+        if self.display_is_power_saving {
+            self.wake_display_and_sync();
+            return;
+        }
+        self.apply_key_release_effect(key_index);
+        handle_button_release(key_index);
+    }
+
+    fn wake_display_and_sync(&mut self) {
+        display_power::request_display_wake();
+        if let Err(error) = self.sync_display_power_state(true) {
+            eprintln!("display power sync failed: {error}");
+        }
+    }
+
+    fn sync_display_power_state(&mut self, force_check: bool) -> Result<(), String> {
+        let now = Instant::now();
+        if !force_check {
+            if let Some(previous_check_at) = self.last_display_power_check_at {
+                if now.duration_since(previous_check_at) < DISPLAY_POWER_POLL_INTERVAL {
+                    return Ok(());
+                }
+            }
+        }
+        self.last_display_power_check_at = Some(now);
+
+        let observation = display_power::query_display_power_state();
+        if observation.is_power_saving == self.display_is_power_saving {
+            return Ok(());
+        }
+
+        if observation.is_power_saving {
+            self.enter_hardware_sleep(&observation)
+        } else {
+            self.leave_hardware_sleep()
+        }
+    }
+
+    fn enter_hardware_sleep(
+        &mut self,
+        observation: &DisplayPowerObservation,
+    ) -> Result<(), String> {
+        println!(
+            "display power-saving ({}); putting Stream Deck to sleep",
+            observation.reason
+        );
+        self.device
+            .set_brightness(SLEEP_BRIGHTNESS_PERCENT)
+            .map_err(format_stream_deck_error)?;
+        self.device
+            .clear_all_button_images()
+            .map_err(format_stream_deck_error)?;
+        self.device.flush().map_err(format_stream_deck_error)?;
+        self.display_is_power_saving = true;
+        Ok(())
+    }
+
+    fn leave_hardware_sleep(&mut self) -> Result<(), String> {
+        println!("display active; restoring Stream Deck");
+        self.display_is_power_saving = false;
+        self.paint_idle_key_images()?;
+        self.device
+            .set_brightness(DEFAULT_BRIGHTNESS_PERCENT)
+            .map_err(format_stream_deck_error)?;
+        Ok(())
+    }
+
     fn refresh_clock_keys(&mut self, force_redraw: bool) -> Result<(), String> {
+        if self.display_is_power_saving {
+            return Ok(());
+        }
+
         let snapshot = ClockSnapshot::from_local_now();
         if !force_redraw && self.last_clock_snapshot.as_ref() == Some(&snapshot) {
             return Ok(());
@@ -259,7 +373,7 @@ fn run_connected_session(
     deck_runtime: &mut DeckRuntime,
     shutdown_requested: &AtomicBool,
 ) -> Result<ConnectedSessionOutcome, String> {
-    deck_runtime.apply_key_images()?;
+    deck_runtime.initialize_visuals_for_current_display_power()?;
     deck_runtime.run_event_loop_until_shutdown_or_disconnect(shutdown_requested)
 }
 
