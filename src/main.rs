@@ -1,5 +1,6 @@
 mod actions;
 mod audio;
+mod brightness_curve;
 mod clock_display;
 mod device;
 mod display_power;

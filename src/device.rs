@@ -9,6 +9,7 @@ use elgato_streamdeck::{DeviceStateUpdate, StreamDeck, StreamDeckError, list_dev
 use image::{DynamicImage, Rgba};
 
 use crate::actions::DeckAction;
+use crate::brightness_curve::hardware_percent_for_user_percent;
 use crate::clock_display::{
     ClockSnapshot, DATE_KEY_INDEX, TIME_KEY_INDEX, render_date_key_image, render_time_key_image,
 };
@@ -227,7 +228,10 @@ impl DeckRuntime {
             eprintln!("error on set deck brightness: {error}");
             return;
         }
-        println!("ok: set deck brightness to {next_brightness}%");
+        println!(
+            "ok: set deck brightness to {next_brightness}% (hardware {}%)",
+            hardware_percent_for_user_percent(next_brightness)
+        );
     }
 
     fn set_awake_brightness(&mut self, brightness_percent: u8) -> Result<(), String> {
@@ -240,8 +244,9 @@ impl DeckRuntime {
     }
 
     fn apply_awake_brightness(&self) -> Result<(), String> {
+        let hardware_percent = hardware_percent_for_user_percent(self.awake_brightness_percent);
         self.device
-            .set_brightness(self.awake_brightness_percent)
+            .set_brightness(hardware_percent)
             .map_err(format_stream_deck_error)
     }
 
