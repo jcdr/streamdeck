@@ -38,7 +38,7 @@ Row 3: 20%       | 40%         | 60%         | 80%           | 100%
 | 8 | Volume up 5% | `Ctrl+Page_Up` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+` |
 | 9 | Date display + deck brightness −10% | Live local date (`dd` / `mm` / `yyyy`). Press lowers Stream Deck backlight by 10% (clamped 0–100). |
 
-Date and time keys share the same primary and secondary font sizes so they stay visually matched. Default backlight is 70% on a **measured visual scale** (not raw HID). Original V2 backlight barely changes below ~25% HID and plateaus after ~55% HID; 10% key steps are mapped through that curve so they look more even. The chosen level is restored after display sleep and after an unplug/replug in the same process.
+Date and time keys share the same primary and secondary font sizes so they stay visually matched. Default backlight is 70% on a **measured visual scale** (not raw HID). Original V2 backlight barely changes below ~25% HID and plateaus after ~55% HID; 10% key steps from 10–90 are mapped through that curve so they look more even. 0% and 100% continue the same slope (not fully off, and not the wasted HID plateau). Display sleep still forces hardware 0%. The chosen level is restored after display sleep and after an unplug/replug in the same process.
 | 10 | Volume 20% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 20%` |
 | 11 | Volume 40% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 40%` |
 | 12 | Volume 60% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 60%` |

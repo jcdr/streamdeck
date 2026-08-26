@@ -25,15 +25,38 @@ const MEASURED_KEY_LUMA_BY_HARDWARE_PERCENT: &[(u8, f32)] = &[
     (100, 149.87),
 ];
 
+const LOW_EXTRAPOLATION_USER_PERCENTS: (u8, u8) = (10, 20);
+const HIGH_EXTRAPOLATION_USER_PERCENTS: (u8, u8) = (80, 90);
+
 pub fn hardware_percent_for_user_percent(user_percent: u8) -> u8 {
     let user_percent = user_percent.min(100);
-    if user_percent == 0 {
-        return 0;
+    if user_percent < LOW_EXTRAPOLATION_USER_PERCENTS.0 {
+        return extrapolate_hardware_percent(
+            LOW_EXTRAPOLATION_USER_PERCENTS.0,
+            LOW_EXTRAPOLATION_USER_PERCENTS.1,
+            user_percent,
+        );
     }
-    if user_percent == 100 {
-        return 100;
+    if user_percent > HIGH_EXTRAPOLATION_USER_PERCENTS.1 {
+        return extrapolate_hardware_percent(
+            HIGH_EXTRAPOLATION_USER_PERCENTS.0,
+            HIGH_EXTRAPOLATION_USER_PERCENTS.1,
+            user_percent,
+        );
     }
+    measured_hardware_percent_for_user_percent(user_percent)
+}
 
+fn extrapolate_hardware_percent(user_a: u8, user_b: u8, user_percent: u8) -> u8 {
+    let hardware_a = f32::from(measured_hardware_percent_for_user_percent(user_a));
+    let hardware_b = f32::from(measured_hardware_percent_for_user_percent(user_b));
+    let t = (f32::from(user_percent) - f32::from(user_a)) / (f32::from(user_b) - f32::from(user_a));
+    (hardware_a + t * (hardware_b - hardware_a))
+        .round()
+        .clamp(0.0, 100.0) as u8
+}
+
+fn measured_hardware_percent_for_user_percent(user_percent: u8) -> u8 {
     let first_luma = MEASURED_KEY_LUMA_BY_HARDWARE_PERCENT[0].1;
     let last_luma = MEASURED_KEY_LUMA_BY_HARDWARE_PERCENT
         [MEASURED_KEY_LUMA_BY_HARDWARE_PERCENT.len() - 1]
@@ -65,9 +88,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn endpoints_map_to_endpoints() {
-        assert_eq!(hardware_percent_for_user_percent(0), 0);
-        assert_eq!(hardware_percent_for_user_percent(100), 100);
+    fn interior_ten_percent_steps_keep_measured_mapping() {
+        let expected = [
+            (10, 25),
+            (20, 30),
+            (30, 35),
+            (40, 38),
+            (50, 41),
+            (60, 45),
+            (70, 48),
+            (80, 51),
+            (90, 55),
+        ];
+        for (user_percent, hardware_percent) in expected {
+            assert_eq!(
+                hardware_percent_for_user_percent(user_percent),
+                hardware_percent,
+                "user {user_percent}%"
+            );
+        }
+    }
+
+    #[test]
+    fn endpoints_follow_adjacent_step_extrapolation() {
+        assert_eq!(hardware_percent_for_user_percent(0), 20);
+        assert_eq!(hardware_percent_for_user_percent(100), 59);
     }
 
     #[test]
