@@ -13,6 +13,8 @@ pub enum DeckAction {
     WindowScreenshot,
     RegionScreenshot,
     OpenScreenshotsFolder,
+    IncreaseDeckBrightness,
+    DecreaseDeckBrightness,
 }
 
 impl DeckAction {
@@ -29,6 +31,9 @@ impl DeckAction {
             DeckAction::WindowScreenshot => screenshot::capture_active_window_screenshot(),
             DeckAction::RegionScreenshot => screenshot::capture_region_screenshot(),
             DeckAction::OpenScreenshotsFolder => file_browser::open_screenshots_directory(),
+            DeckAction::IncreaseDeckBrightness | DeckAction::DecreaseDeckBrightness => {
+                Err("deck brightness is applied by the device runtime".to_string())
+            }
         }
     }
 
@@ -45,6 +50,8 @@ impl DeckAction {
             DeckAction::WindowScreenshot => "window screenshot".to_string(),
             DeckAction::RegionScreenshot => "region screenshot".to_string(),
             DeckAction::OpenScreenshotsFolder => "open screenshots folder".to_string(),
+            DeckAction::IncreaseDeckBrightness => "increase deck brightness 10%".to_string(),
+            DeckAction::DecreaseDeckBrightness => "decrease deck brightness 10%".to_string(),
         }
     }
 }

@@ -20,8 +20,8 @@ library client is the right layer.
 ## Key layout (Original V2, 5×3)
 
 ```
-Row 1: full shot | window shot | region shot | open Pictures | time hh:mm / ss / TZ
-Row 2: mute      | unmute      | vol −5%     | vol +5%       | date dd/mm/yyyy
+Row 1: full shot | window shot | region shot | open Pictures | time / brightness +10%
+Row 2: mute      | unmute      | vol −5%     | vol +5%       | date / brightness −10%
 Row 3: 20%       | 40%         | 60%         | 80%           | 100%
 ```
 
@@ -31,14 +31,14 @@ Row 3: 20%       | 40%         | 60%         | 80%           | 100%
 | 1 | Window screenshot | `Shift+Print` → `/usr/local/bin/screenshoot-window` |
 | 2 | Region screenshot | `Ctrl+Print` → `/usr/local/bin/screenshoot-region` |
 | 3 | Open screenshots folder | `thunar ~/Pictures` (XFCE file manager) |
-| 4 | Time display | Live local time, three lines: `hh:mm` / `ss` / timezone (TZ smaller) |
+| 4 | Time display + deck brightness +10% | Live local time (`hh:mm` / `ss` / TZ). Press raises Stream Deck backlight by 10% (clamped 0–100). |
 | 5 | Mute audio | `Ctrl+End` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 1` |
 | 6 | Unmute audio | `Ctrl+Home` → `wpctl set-mute @DEFAULT_AUDIO_SINK@ 0` |
 | 7 | Volume down 5% | `Ctrl+Page_Down` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-` |
 | 8 | Volume up 5% | `Ctrl+Page_Up` → `wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+` |
-| 9 | Date display | Live local date, three lines: `dd` / `mm` / `yyyy` (year smaller) |
+| 9 | Date display + deck brightness −10% | Live local date (`dd` / `mm` / `yyyy`). Press lowers Stream Deck backlight by 10% (clamped 0–100). |
 
-Date and time keys share the same primary and secondary font sizes so they stay visually matched.
+Date and time keys share the same primary and secondary font sizes so they stay visually matched. Default backlight is 70%. The chosen level is restored after display sleep and after an unplug/replug in the same process.
 | 10 | Volume 20% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 20%` |
 | 11 | Volume 40% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 40%` |
 | 12 | Volume 60% | `wpctl set-volume @DEFAULT_AUDIO_SINK@ 60%` |

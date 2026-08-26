@@ -17,6 +17,9 @@ use crate::keys::{action_for_key_index, key_bindings};
 
 const KEY_IMAGE_DIRECTORY_NAME: &str = "assets/keys";
 const DEFAULT_BRIGHTNESS_PERCENT: u8 = 70;
+const BRIGHTNESS_STEP_PERCENT: i16 = 10;
+const MINIMUM_BRIGHTNESS_PERCENT: u8 = 0;
+const MAXIMUM_BRIGHTNESS_PERCENT: u8 = 100;
 const SLEEP_BRIGHTNESS_PERCENT: u8 = 0;
 const BUTTON_POLL_TIMEOUT: Duration = Duration::from_millis(100);
 const DISPLAY_POWER_POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -44,10 +47,11 @@ pub struct DeckRuntime {
     display_is_power_saving: bool,
     last_display_power_check_at: Option<Instant>,
     keys_pressed_while_sleeping: HashSet<u8>,
+    awake_brightness_percent: u8,
 }
 
 impl DeckRuntime {
-    pub fn open(assets_directory: PathBuf) -> Result<Self, String> {
+    pub fn open(assets_directory: PathBuf, awake_brightness_percent: u8) -> Result<Self, String> {
         let hid_api = new_hidapi().map_err(|error| format!("hidapi init failed: {error}"))?;
         let (device_kind, serial_number) = list_devices(&hid_api)
             .into_iter()
@@ -75,7 +79,12 @@ impl DeckRuntime {
             display_is_power_saving: false,
             last_display_power_check_at: None,
             keys_pressed_while_sleeping: HashSet::new(),
+            awake_brightness_percent: clamp_brightness_percent(awake_brightness_percent),
         })
+    }
+
+    pub fn awake_brightness_percent(&self) -> u8 {
+        self.awake_brightness_percent
     }
 
     pub fn initialize_visuals_for_current_display_power(&mut self) -> Result<(), String> {
@@ -89,9 +98,7 @@ impl DeckRuntime {
 
     fn apply_awake_key_images(&mut self) -> Result<(), String> {
         self.paint_idle_key_images()?;
-        self.device
-            .set_brightness(DEFAULT_BRIGHTNESS_PERCENT)
-            .map_err(format_stream_deck_error)?;
+        self.apply_awake_brightness()?;
         self.display_is_power_saving = false;
         Ok(())
     }
@@ -190,7 +197,52 @@ impl DeckRuntime {
             return;
         }
         self.apply_key_release_effect(key_index);
-        handle_button_release(key_index);
+        self.dispatch_button_release(key_index);
+    }
+
+    fn dispatch_button_release(&mut self, key_index: u8) {
+        let Some(action) = action_for_key_index(key_index) else {
+            return;
+        };
+        match action {
+            DeckAction::IncreaseDeckBrightness => {
+                self.nudge_awake_brightness(BRIGHTNESS_STEP_PERCENT);
+            }
+            DeckAction::DecreaseDeckBrightness => {
+                self.nudge_awake_brightness(-BRIGHTNESS_STEP_PERCENT);
+            }
+            other => dispatch_action(other),
+        }
+    }
+
+    fn nudge_awake_brightness(&mut self, delta_percent: i16) {
+        let next_brightness = clamp_brightness_percent_i16(
+            i16::from(self.awake_brightness_percent) + delta_percent,
+        );
+        if next_brightness == self.awake_brightness_percent {
+            println!("deck brightness already {next_brightness}%");
+            return;
+        }
+        if let Err(error) = self.set_awake_brightness(next_brightness) {
+            eprintln!("error on set deck brightness: {error}");
+            return;
+        }
+        println!("ok: set deck brightness to {next_brightness}%");
+    }
+
+    fn set_awake_brightness(&mut self, brightness_percent: u8) -> Result<(), String> {
+        let brightness_percent = clamp_brightness_percent(brightness_percent);
+        self.awake_brightness_percent = brightness_percent;
+        if self.display_is_power_saving {
+            return Ok(());
+        }
+        self.apply_awake_brightness()
+    }
+
+    fn apply_awake_brightness(&self) -> Result<(), String> {
+        self.device
+            .set_brightness(self.awake_brightness_percent)
+            .map_err(format_stream_deck_error)
     }
 
     fn wake_display_and_sync(&mut self) {
@@ -246,9 +298,7 @@ impl DeckRuntime {
         println!("display active; restoring Stream Deck");
         self.display_is_power_saving = false;
         self.paint_idle_key_images()?;
-        self.device
-            .set_brightness(DEFAULT_BRIGHTNESS_PERCENT)
-            .map_err(format_stream_deck_error)?;
+        self.apply_awake_brightness()?;
         Ok(())
     }
 
@@ -334,9 +384,10 @@ pub fn run_device_supervisor(
     shutdown_requested: &AtomicBool,
 ) -> Result<(), String> {
     let mut last_waiting_log_at: Option<Instant> = None;
+    let mut remembered_awake_brightness_percent = DEFAULT_BRIGHTNESS_PERCENT;
 
     while !shutdown_requested.load(Ordering::SeqCst) {
-        match try_open_deck_runtime(project_root.clone()) {
+        match try_open_deck_runtime(project_root.clone(), remembered_awake_brightness_percent) {
             Ok(mut deck_runtime) => {
                 last_waiting_log_at = None;
                 match run_connected_session(&mut deck_runtime, shutdown_requested)? {
@@ -347,6 +398,8 @@ pub fn run_device_supervisor(
                         return Ok(());
                     }
                     ConnectedSessionOutcome::DeviceDisconnected => {
+                        remembered_awake_brightness_percent =
+                            deck_runtime.awake_brightness_percent();
                         drop(deck_runtime);
                         sleep_while_not_shutdown(
                             DEVICE_RECONNECT_POLL_INTERVAL,
@@ -365,8 +418,11 @@ pub fn run_device_supervisor(
     Ok(())
 }
 
-fn try_open_deck_runtime(project_root: PathBuf) -> Result<DeckRuntime, String> {
-    DeckRuntime::open(project_root)
+fn try_open_deck_runtime(
+    project_root: PathBuf,
+    awake_brightness_percent: u8,
+) -> Result<DeckRuntime, String> {
+    DeckRuntime::open(project_root, awake_brightness_percent)
 }
 
 fn run_connected_session(
@@ -432,18 +488,22 @@ fn load_key_image(image_path: &Path) -> Result<DynamicImage, String> {
         .map_err(|error| format!("failed to open {}: {error}", image_path.display()))
 }
 
-fn handle_button_release(key_index: u8) {
-    let Some(action) = action_for_key_index(key_index) else {
-        return;
-    };
-    dispatch_action(action);
-}
-
 fn dispatch_action(action: DeckAction) {
     match action.execute() {
         Ok(()) => println!("ok: {}", action.label()),
         Err(error) => eprintln!("error on {}: {error}", action.label()),
     }
+}
+
+fn clamp_brightness_percent(brightness_percent: u8) -> u8 {
+    brightness_percent.clamp(MINIMUM_BRIGHTNESS_PERCENT, MAXIMUM_BRIGHTNESS_PERCENT)
+}
+
+fn clamp_brightness_percent_i16(brightness_percent: i16) -> u8 {
+    brightness_percent.clamp(
+        i16::from(MINIMUM_BRIGHTNESS_PERCENT),
+        i16::from(MAXIMUM_BRIGHTNESS_PERCENT),
+    ) as u8
 }
 
 fn format_stream_deck_error(error: StreamDeckError) -> String {
@@ -456,4 +516,17 @@ fn is_interrupted_system_call(error: &StreamDeckError) -> bool {
 
 pub fn resolve_project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn brightness_step_clamps_to_zero_and_one_hundred() {
+        assert_eq!(clamp_brightness_percent_i16(70 + 10), 80);
+        assert_eq!(clamp_brightness_percent_i16(70 - 10), 60);
+        assert_eq!(clamp_brightness_percent_i16(100 + 10), 100);
+        assert_eq!(clamp_brightness_percent_i16(0 - 10), 0);
+    }
 }

@@ -1,4 +1,5 @@
 use crate::actions::DeckAction;
+use crate::clock_display::{DATE_KEY_INDEX, TIME_KEY_INDEX};
 
 const FULL_SCREENSHOT_KEY_INDEX: u8 = 0;
 const WINDOW_SCREENSHOT_KEY_INDEX: u8 = 1;
@@ -116,8 +117,33 @@ pub fn key_bindings() -> &'static [KeyBinding] {
 }
 
 pub fn action_for_key_index(key_index: u8) -> Option<DeckAction> {
-    key_bindings()
-        .iter()
-        .find(|binding| binding.key_index == key_index)
-        .map(|binding| binding.action)
+    match key_index {
+        TIME_KEY_INDEX => Some(DeckAction::IncreaseDeckBrightness),
+        DATE_KEY_INDEX => Some(DeckAction::DecreaseDeckBrightness),
+        _ => key_bindings()
+            .iter()
+            .find(|binding| binding.key_index == key_index)
+            .map(|binding| binding.action),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn time_key_increases_deck_brightness() {
+        assert_eq!(
+            action_for_key_index(TIME_KEY_INDEX),
+            Some(DeckAction::IncreaseDeckBrightness)
+        );
+    }
+
+    #[test]
+    fn date_key_decreases_deck_brightness() {
+        assert_eq!(
+            action_for_key_index(DATE_KEY_INDEX),
+            Some(DeckAction::DecreaseDeckBrightness)
+        );
+    }
 }
